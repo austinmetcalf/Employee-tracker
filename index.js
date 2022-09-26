@@ -16,7 +16,7 @@ connection.connect(function (err) {
 function userPrompt(){
   inquirer.prompt([
     {
-      name: "action",
+      name: "query",
       type: "list",
       message: "What would you like to do?",
       choices: [
@@ -26,16 +26,12 @@ function userPrompt(){
         "Add a new department",
         "Add a new role",
         "Add a new employee",
-        "Remove an employee",
-        "Remove a role",
-        "Remove a department",
         "Update employee roles",
-        "View the total utilized budget of a department",
         "Exit"
       ]
     }])
     .then(function (answer) {
-      switch (answer.action) {
+      switch (answer.query) {
         case "View all departments":
           viewDepartments();
           break;
@@ -54,17 +50,8 @@ function userPrompt(){
         case "Add a new employee":
           addEmployee();
           break;
-        case "Remove an employee":
-          removeEmployee();
-          break;
-        case "Remove a role":
-          removeRole();
-          break;
-        case "Remove a department":
-            removeDepartment();
-            break;
         case "Update employee roles":
-          selectEmp();
+          updateRole();
           break;
         case "exit":
           connection.end();
@@ -72,8 +59,30 @@ function userPrompt(){
       }
     });
 };
+// view query for departments roles and employee tables, console.table response
+function viewDepartments() {
+  connection.query(`SELECT * FROM departments`, function (err, res) {
+    if (err) throw err;
+    console.table(res);
+    userPrompt();
+  })
+};
 
-//called in addContent function if selected dept
+function viewRoles() {
+  connection.query(`SELECT * FROM role`, function (err, res) {
+    if (err) throw err;
+    console.table(res);
+    userPrompt();
+  })
+};
+
+function viewEmployees() {
+  connection.query(`SELECT * FROM employee`, function (err, res) {
+    if (err) throw err;
+    console.table(res);
+    userPrompt();
+  })
+};
 function addDepartment() {
   inquirer.prompt([
     {
@@ -88,17 +97,17 @@ function addDepartment() {
       function (err, res) {
         if (err) throw err;
         console.log(" Department Added!\n");
-        start();
+        userPrompt();
       }
     );
   });
 }
 
-//called in addContent function if selected role
+
 function addRole() {
   connection.query("SELECT * FROM departments", function (err, res) {
     if (err) throw err;
-    //asking for the three properties on the roles table      
+         
     inquirer.prompt([
       {
         name: "title",
@@ -112,22 +121,22 @@ function addRole() {
       },
       {
         name: "deptId",
-        type: "rawlist",
+        type: "list",
         message: "Select a department for this role",
         choices: res.map(item => item.name)
       }
     ]).then(function (answers) {
       const selectedDept = res.find(dept => dept.name === answers.deptId);
-      connection.query("INSERT INTO roles SET ?",
+      connection.query("INSERT INTO role SET ?",
         {
           title: answers.title,
           salary: answers.salary,
-          dept_id: selectedDept.id
+          department_id: selectedDept.id
         },
         function (err, res) {
           if (err) throw err;
           console.log("New role added!\n");
-          start();
+          userPrompt();
         }
       );
     });
@@ -135,7 +144,7 @@ function addRole() {
 };
 
 function addEmployee() {
-  connection.query("SELECT * FROM roles", function (err, results) {
+  connection.query("SELECT * FROM role", function (err, results) {
     if (err) throw err;
     inquirer.prompt([
       {
@@ -150,66 +159,41 @@ function addEmployee() {
       },
       {
         name: "roleId",
-        type: "rawlist",
+        type: "list",
         choices: results.map(item => item.title),
         message: "Select a role for the employee"
       }
     ]).then(function (answers) {
       const selectedRole = results.find(item => item.title === answers.roleId);
-      connection.query("INSERT INTO employees SET ?",
+      connection.query("INSERT INTO employee SET ?",
         {
           first_name: answers.firstName,
           last_name: answers.lastName,
           role_id: selectedRole.id
         }, function (err, res) {
           if (err) throw err;
-          console.log("Added new employee named " + answers.firstName + " " + answers.lastName + "\n");
-          start();
+          userPrompt();
         })
     })
   })
 };
 
-function viewDepartments() {
-  connection.query(`SELECT * FROM departments`, function (err, res) {
-    if (err) throw err;
-    console.table(res);
-    start();
-  })
-};
-
-function viewRoles() {
-  connection.query(`SELECT * FROM roles`, function (err, res) {
-    if (err) throw err;
-    console.table(res);
-    start();
-  })
-};
-
-function viewEmployees() {
-  connection.query(`SELECT * FROM employees`, function (err, res) {
-    if (err) throw err;
-    console.table(res);
-    start();
-  })
-};
-
-function selectEmp() {
-  connection.query("SELECT * FROM employees", function (err, res) {
+function updateRole() {
+  connection.query("SELECT * FROM employee", function (err, res) {
     if (err) throw err;
     inquirer.prompt([
       {
-        type: "rawlist",
+        type: "list",
         name: "selectEmp",
         message: "Select the employee who is changing roles",
         choices: res.map(emp => emp.first_name)
       }
     ]).then(function (answer) {
       const selectedEmp = res.find(emp => emp.first_name === answer.selectEmp);
-      connection.query("SELECT * FROM roles", function (err, res) {
+      connection.query("SELECT * FROM role", function (err, res) {
         inquirer.prompt([
           {
-            type: "rawlist",
+            type: "list",
             name: "newRole",
             message: "Select the new role for this employee",
             choices: res.map(item => item.title)
@@ -217,92 +201,14 @@ function selectEmp() {
         ]).then(function (answer) {
           const selectedRole = res.find(role => role.title === answer.newRole);
 
-          connection.query("UPDATE employees SET role_id = ? WHERE id = ?", [selectedRole.id, selectedEmp.id],
+          connection.query("UPDATE employee SET role_id = ? WHERE id = ?", [selectedRole.id, selectedEmp.id],
             function (error) {
               if (error) throw err;
-              start();
+              userPrompt();
             }
           );
         })
       })
     })
-  })
-};
-
-function removeEmployee() {
-  connection.query("SELECT * FROM employees", function (err, res) {
-    if (err) throw err;
-    inquirer.prompt([
-      {
-        type: "rawlist",
-        name: "removeEmp",
-        message: "Select the employee who will be removed",
-        choices: res.map(emp => emp.id && emp.first_name)
-      }
-    ]).then(function (answer) {
-      const selectedEmp = res.find(emp => emp.id && emp.first_name === answer.removeEmp);
-      connection.query("DELETE FROM employees WHERE ?",
-        [{
-          id: selectedEmp.id
-        }],
-        function (err, res) {
-          if (err) throw err;
-          console.log("Employee Removed\n");
-          start();
-        }
-      );
-    });
-  })
-};
-
-function removeRole() {
-  connection.query("SELECT * FROM roles", function (err, res) {
-    if (err) throw err;
-    inquirer.prompt([
-      {
-        type: "rawlist",
-        name: "removeRole",
-        message: "Select the role that will be removed",
-        choices: res.map(role => role.id && role.title)
-      }
-    ]).then(function (answer) {
-      const selectedRole = res.find(role => role.id && role.title === answer.removeRole);
-      connection.query("DELETE FROM roles WHERE ?",
-        [{
-          id: selectedRole.id
-        }],
-        function (err, res) {
-          if (err) throw err;
-          console.log("Role Removed\n");
-          start();
-        }
-      );
-    });
-  })
-};
-
-function removeDepartment() {
-  connection.query("SELECT * FROM departments", function (err, res) {
-    if (err) throw err;
-    inquirer.prompt([
-      {
-        type: "rawlist",
-        name: "removeDept",
-        message: "Select the department that will be removed",
-        choices: res.map(item => item.id && item.name)
-      }
-    ]).then(function (answer) {
-      const selectedDept = res.find(item => item.id && item.name === answer.removeDept);
-      connection.query("DELETE FROM roles WHERE ?",
-        [{
-          id: selectedDept.id
-        }],
-        function (err, res) {
-          if (err) throw err;
-          console.log("Department Removed\n");
-          start();
-        }
-      );
-    });
   })
 };
